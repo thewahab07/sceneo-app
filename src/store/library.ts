@@ -1,15 +1,15 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { create } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
 
-import type { ItemMeta } from '@/lib/tmdb';
+import type { ItemMeta } from "@/lib/tmdb";
 import {
   epKey,
   type Settings,
   type Status,
   type ThemePreference,
   type TrackedItem,
-} from '@/lib/types';
+} from "@/lib/types";
 
 /* ---------- Derived helpers (pure) ---------- */
 
@@ -19,24 +19,28 @@ export const airedTotal = (item: TrackedItem) =>
 export const episodeTotal = (item: TrackedItem) =>
   item.seasons.reduce((sum, s) => sum + s.episodeCount, 0);
 
-export const watchedCount = (item: TrackedItem) => Object.keys(item.watched).length;
+export const watchedCount = (item: TrackedItem) =>
+  Object.keys(item.watched).length;
 
 export const seasonWatchedCount = (item: TrackedItem, season: number) =>
   Object.keys(item.watched).filter((k) => k.startsWith(`${season}:`)).length;
 
 /** 0..1 progress. Movies are 0 or 1; shows are watched / aired episodes. */
 export function progressOf(item: TrackedItem): number {
-  if (item.type === 'movie') return item.watchedAt ? 1 : 0;
+  if (item.type === "movie") return item.watchedAt ? 1 : 0;
   const total = airedTotal(item);
   if (total === 0) return 0;
   return Math.min(1, watchedCount(item) / total);
 }
 
 /** Next unwatched aired episode, or null. */
-export function nextToWatch(item: TrackedItem): { season: number; episode: number } | null {
+export function nextToWatch(
+  item: TrackedItem,
+): { season: number; episode: number } | null {
   for (const s of item.seasons) {
     for (let e = 1; e <= s.airedCount; e++) {
-      if (!item.watched[epKey(s.number, e)]) return { season: s.number, episode: e };
+      if (!item.watched[epKey(s.number, e)])
+        return { season: s.number, episode: e };
     }
   }
   return null;
@@ -44,20 +48,24 @@ export function nextToWatch(item: TrackedItem): { season: number; episode: numbe
 
 /** Total minutes watched for a single item. */
 export function minutesWatched(item: TrackedItem): number {
-  const rt = item.runtime ?? (item.type === 'movie' ? 100 : 40);
-  if (item.type === 'movie') return item.watchedAt ? rt : 0;
+  const rt = item.runtime ?? (item.type === "movie" ? 100 : 40);
+  if (item.type === "movie") return item.watchedAt ? rt : 0;
   return watchedCount(item) * rt;
 }
 
 function reconcileStatus(item: TrackedItem): TrackedItem {
-  if (item.type !== 'tv') return item;
+  if (item.type !== "tv") return item;
   const watched = watchedCount(item);
   const aired = airedTotal(item);
-  const finished = item.tvStatus === 'Ended' || item.tvStatus === 'Canceled';
+  const finished = item.tvStatus === "Ended" || item.tvStatus === "Canceled";
 
-  if (aired > 0 && watched >= aired && finished) return { ...item, status: 'completed' };
-  if (watched > 0 && (item.status === 'planned' || item.status === 'completed')) {
-    return { ...item, status: 'watching' };
+  if (aired > 0 && watched >= aired && finished)
+    return { ...item, status: "completed" };
+  if (
+    watched > 0 &&
+    (item.status === "planned" || item.status === "completed")
+  ) {
+    return { ...item, status: "watching" };
   }
   return item;
 }
@@ -74,8 +82,6 @@ interface LibraryState {
   refreshMeta: (meta: ItemMeta) => void;
 
   setStatus: (key: string, status: Status) => void;
-  setRating: (key: string, rating: number | null) => void;
-  setNotes: (key: string, notes: string) => void;
 
   toggleMovieWatched: (key: string) => void;
   toggleEpisode: (key: string, season: number, episode: number) => void;
@@ -86,7 +92,11 @@ interface LibraryState {
   setAllWatched: (key: string, watched: boolean) => void;
 
   setTheme: (theme: ThemePreference) => void;
-  importItems: (items: TrackedItem[], settings: Settings | null, mode: 'merge' | 'replace') => void;
+  importItems: (
+    items: TrackedItem[],
+    settings: Settings | null,
+    mode: "merge" | "replace",
+  ) => void;
   clearAll: () => void;
 }
 
@@ -94,32 +104,33 @@ const update = (
   state: LibraryState,
   key: string,
   fn: (item: TrackedItem) => TrackedItem,
-): Pick<LibraryState, 'items'> | LibraryState => {
+): Pick<LibraryState, "items"> | LibraryState => {
   const current = state.items[key];
   if (!current) return state;
   const next = fn(current);
-  return { items: { ...state.items, [key]: { ...next, updatedAt: Date.now() } } };
+  return {
+    items: { ...state.items, [key]: { ...next, updatedAt: Date.now() } },
+  };
 };
 
 export const useLibrary = create<LibraryState>()(
   persist(
     (set) => ({
       items: {},
-      settings: { theme: 'dark' },
+      settings: { theme: "dark" },
       hydrated: false,
 
-      addItem: (meta, status = 'planned') =>
+      addItem: (meta, status = "planned") =>
         set((state) => {
           if (state.items[meta.key]) return state;
           const now = Date.now();
           const item: TrackedItem = {
             ...meta,
             status,
-            rating: null,
-            notes: '',
             addedAt: now,
             updatedAt: now,
-            watchedAt: meta.type === 'movie' && status === 'completed' ? now : null,
+            watchedAt:
+              meta.type === "movie" && status === "completed" ? now : null,
             watched: {},
             checkedAt: now,
           };
@@ -145,17 +156,13 @@ export const useLibrary = create<LibraryState>()(
             ...item,
             status,
             watchedAt:
-              item.type === 'movie'
-                ? status === 'completed'
+              item.type === "movie"
+                ? status === "completed"
                   ? (item.watchedAt ?? Date.now())
                   : item.watchedAt
                 : item.watchedAt,
           })),
         ),
-
-      setRating: (key, rating) => set((state) => update(state, key, (item) => ({ ...item, rating }))),
-
-      setNotes: (key, notes) => set((state) => update(state, key, (item) => ({ ...item, notes }))),
 
       toggleMovieWatched: (key) =>
         set((state) =>
@@ -164,10 +171,10 @@ export const useLibrary = create<LibraryState>()(
               return {
                 ...item,
                 watchedAt: null,
-                status: item.status === 'completed' ? 'planned' : item.status,
+                status: item.status === "completed" ? "planned" : item.status,
               };
             }
-            return { ...item, watchedAt: Date.now(), status: 'completed' };
+            return { ...item, watchedAt: Date.now(), status: "completed" };
           }),
         ),
 
@@ -180,8 +187,12 @@ export const useLibrary = create<LibraryState>()(
             else watched[k] = Date.now();
             const next = reconcileStatus({ ...item, watched });
             // Un-watching an episode of a completed show moves it back to "watching".
-            if (!watched[k] && next.status === 'completed' && airedTotal(next) > Object.keys(watched).length) {
-              return { ...next, status: 'watching' };
+            if (
+              !watched[k] &&
+              next.status === "completed" &&
+              airedTotal(next) > Object.keys(watched).length
+            ) {
+              return { ...next, status: "watching" };
             }
             return next;
           }),
@@ -200,7 +211,8 @@ export const useLibrary = create<LibraryState>()(
               else delete watched[k];
             }
             const next = reconcileStatus({ ...item, watched });
-            if (!value && next.status === 'completed') return { ...next, status: 'watching' };
+            if (!value && next.status === "completed")
+              return { ...next, status: "watching" };
             return next;
           }),
         ),
@@ -212,8 +224,12 @@ export const useLibrary = create<LibraryState>()(
             const now = Date.now();
             for (const s of item.seasons) {
               if (s.number > season) break;
-              const last = s.number === season ? Math.min(episode, s.airedCount) : s.airedCount;
-              for (let e = 1; e <= last; e++) watched[epKey(s.number, e)] ??= now;
+              const last =
+                s.number === season
+                  ? Math.min(episode, s.airedCount)
+                  : s.airedCount;
+              for (let e = 1; e <= last; e++)
+                watched[epKey(s.number, e)] ??= now;
             }
             return reconcileStatus({ ...item, watched });
           }),
@@ -222,44 +238,73 @@ export const useLibrary = create<LibraryState>()(
       setAllWatched: (key, value) =>
         set((state) =>
           update(state, key, (item) => {
-            if (item.type === 'movie') {
+            if (item.type === "movie") {
               return value
-                ? { ...item, watchedAt: item.watchedAt ?? Date.now(), status: 'completed' }
-                : { ...item, watchedAt: null, status: item.status === 'completed' ? 'planned' : item.status };
+                ? {
+                    ...item,
+                    watchedAt: item.watchedAt ?? Date.now(),
+                    status: "completed",
+                  }
+                : {
+                    ...item,
+                    watchedAt: null,
+                    status:
+                      item.status === "completed" ? "planned" : item.status,
+                  };
             }
             const watched: Record<string, number> = {};
             if (value) {
               const now = Date.now();
               for (const s of item.seasons) {
-                for (let e = 1; e <= s.airedCount; e++) watched[epKey(s.number, e)] = item.watched[epKey(s.number, e)] ?? now;
+                for (let e = 1; e <= s.airedCount; e++)
+                  watched[epKey(s.number, e)] =
+                    item.watched[epKey(s.number, e)] ?? now;
               }
             }
             const next = reconcileStatus({ ...item, watched });
-            if (!value && next.status === 'completed') return { ...next, status: 'planned' };
+            if (!value && next.status === "completed")
+              return { ...next, status: "planned" };
             return next;
           }),
         ),
 
-      setTheme: (theme) => set((state) => ({ settings: { ...state.settings, theme } })),
+      setTheme: (theme) =>
+        set((state) => ({ settings: { ...state.settings, theme } })),
 
       importItems: (incoming, settings, mode) =>
         set((state) => {
-          const base = mode === 'replace' ? {} : { ...state.items };
+          const base = mode === "replace" ? {} : { ...state.items };
           for (const item of incoming) {
             const existing = base[item.key];
-            if (!existing || item.updatedAt >= existing.updatedAt) base[item.key] = item;
+            if (!existing || item.updatedAt >= existing.updatedAt)
+              base[item.key] = item;
           }
           return {
             items: base,
-            settings: settings ? { ...state.settings, ...settings } : state.settings,
+            settings: settings
+              ? { ...state.settings, ...settings }
+              : state.settings,
           };
         }),
 
       clearAll: () => set({ items: {} }),
     }),
     {
-      name: 'sceneo-library',
-      version: 1,
+      name: "sceneo-library",
+      version: 2,
+      // v2: ratings and notes were removed; drop any leftovers from older saved data.
+      migrate: (persisted, version) => {
+        const state = persisted as {
+          items?: Record<string, Record<string, unknown>>;
+        };
+        if (version < 2 && state?.items) {
+          for (const item of Object.values(state.items)) {
+            delete item.rating;
+            delete item.notes;
+          }
+        }
+        return state as unknown as LibraryState;
+      },
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({ items: state.items, settings: state.settings }),
       onRehydrateStorage: () => () => {

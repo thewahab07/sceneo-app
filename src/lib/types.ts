@@ -1,15 +1,26 @@
-export type MediaType = 'movie' | 'tv';
+export type MediaType = "movie" | "tv";
 
-export type Status = 'watching' | 'planned' | 'completed' | 'on_hold' | 'dropped';
+export type Status =
+  | "watching"
+  | "planned"
+  | "completed"
+  | "on_hold"
+  | "dropped";
 
-export const STATUSES: Status[] = ['watching', 'planned', 'completed', 'on_hold', 'dropped'];
+export const STATUSES: Status[] = [
+  "watching",
+  "planned",
+  "completed",
+  "on_hold",
+  "dropped",
+];
 
 export const STATUS_LABEL: Record<Status, string> = {
-  watching: 'Watching',
-  planned: 'Plan to watch',
-  completed: 'Completed',
-  on_hold: 'On hold',
-  dropped: 'Dropped',
+  watching: "Watching",
+  planned: "Plan to watch",
+  completed: "Completed",
+  on_hold: "On hold",
+  dropped: "Dropped",
 };
 
 export interface SeasonMeta {
@@ -46,9 +57,6 @@ export interface TrackedItem {
   releaseDate: string | null;
 
   status: Status;
-  /** 1-10 personal rating. */
-  rating: number | null;
-  notes: string;
   addedAt: number;
   updatedAt: number;
 
@@ -65,14 +73,14 @@ export interface TrackedItem {
   checkedAt: number;
 }
 
-export type ThemePreference = 'system' | 'light' | 'dark';
+export type ThemePreference = "system" | "light" | "dark";
 
 export interface Settings {
   theme: ThemePreference;
 }
 
 export interface BackupFile {
-  app: 'sceneo';
+  app: "sceneo";
   version: 1;
   exportedAt: string;
   settings: Settings;
@@ -98,5 +106,6 @@ export interface EpisodeInfo {
   overview: string;
 }
 
-export const epKey = (season: number, episode: number) => `${season}:${episode}`;
+export const epKey = (season: number, episode: number) =>
+  `${season}:${episode}`;
 export const itemKey = (type: MediaType, id: number) => `${type}:${id}`;

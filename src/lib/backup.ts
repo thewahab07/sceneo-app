@@ -1,8 +1,8 @@
-import * as DocumentPicker from 'expo-document-picker';
-import { File, Paths } from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
+import * as DocumentPicker from "expo-document-picker";
+import { File, Paths } from "expo-file-system";
+import * as Sharing from "expo-sharing";
 
-import { useLibrary } from '@/store/library';
+import { useLibrary } from "@/store/library";
 import {
   STATUSES,
   type BackupFile,
@@ -11,14 +11,14 @@ import {
   type Status,
   type ThemePreference,
   type TrackedItem,
-} from './types';
+} from "./types";
 
 /* ---------- Export ---------- */
 
 export function buildBackup(): BackupFile {
   const { items, settings } = useLibrary.getState();
   return {
-    app: 'sceneo',
+    app: "sceneo",
     version: 1,
     exportedAt: new Date().toISOString(),
     settings,
@@ -35,35 +35,41 @@ export async function exportBackup(): Promise<void> {
   file.write(JSON.stringify(backup, null, 2));
 
   if (!(await Sharing.isAvailableAsync())) {
-    throw new Error('Sharing is not available on this device.');
+    throw new Error("Sharing is not available on this device.");
   }
   await Sharing.shareAsync(file.uri, {
-    mimeType: 'application/json',
-    dialogTitle: 'Export Sceneo backup',
-    UTI: 'public.json',
+    mimeType: "application/json",
+    dialogTitle: "Export Sceneo backup",
+    UTI: "public.json",
   });
 }
 
 /* ---------- Import ---------- */
 
-const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
-const str = (v: unknown, fallback = '') => (typeof v === 'string' ? v : fallback);
-const strOrNull = (v: unknown) => (typeof v === 'string' ? v : null);
-const numOrNull = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+const isObj = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null;
+const str = (v: unknown, fallback = "") =>
+  typeof v === "string" ? v : fallback;
+const strOrNull = (v: unknown) => (typeof v === "string" ? v : null);
+const numOrNull = (v: unknown) =>
+  typeof v === "number" && Number.isFinite(v) ? v : null;
 
 function sanitizeItem(raw: unknown): TrackedItem | null {
   if (!isObj(raw)) return null;
   const type = raw.type as MediaType;
   const id = raw.id;
-  if ((type !== 'movie' && type !== 'tv') || typeof id !== 'number') return null;
+  if ((type !== "movie" && type !== "tv") || typeof id !== "number")
+    return null;
 
-  const status: Status = STATUSES.includes(raw.status as Status) ? (raw.status as Status) : 'planned';
+  const status: Status = STATUSES.includes(raw.status as Status)
+    ? (raw.status as Status)
+    : "planned";
   const now = Date.now();
 
   const watched: Record<string, number> = {};
   if (isObj(raw.watched)) {
     for (const [k, v] of Object.entries(raw.watched)) {
-      if (/^\d+:\d+$/.test(k)) watched[k] = typeof v === 'number' ? v : now;
+      if (/^\d+:\d+$/.test(k)) watched[k] = typeof v === "number" ? v : now;
     }
   }
 
@@ -71,17 +77,21 @@ function sanitizeItem(raw: unknown): TrackedItem | null {
     ? raw.seasons
         .filter(isObj)
         .map((s) => ({
-          number: typeof s.number === 'number' ? s.number : 0,
+          number: typeof s.number === "number" ? s.number : 0,
           name: str(s.name),
-          episodeCount: typeof s.episodeCount === 'number' ? s.episodeCount : 0,
-          airedCount: typeof s.airedCount === 'number' ? s.airedCount : 0,
+          episodeCount: typeof s.episodeCount === "number" ? s.episodeCount : 0,
+          airedCount: typeof s.airedCount === "number" ? s.airedCount : 0,
           airDate: strOrNull(s.airDate),
         }))
         .filter((s) => s.number > 0)
     : [];
 
-  let nextEpisode: TrackedItem['nextEpisode'] = null;
-  if (isObj(raw.nextEpisode) && typeof raw.nextEpisode.season === 'number' && typeof raw.nextEpisode.episode === 'number') {
+  let nextEpisode: TrackedItem["nextEpisode"] = null;
+  if (
+    isObj(raw.nextEpisode) &&
+    typeof raw.nextEpisode.season === "number" &&
+    typeof raw.nextEpisode.episode === "number"
+  ) {
     nextEpisode = {
       season: raw.nextEpisode.season,
       episode: raw.nextEpisode.episode,
@@ -90,23 +100,21 @@ function sanitizeItem(raw: unknown): TrackedItem | null {
     };
   }
 
-  const rating = numOrNull(raw.rating);
-
   return {
     key: `${type}:${id}`,
     id,
     type,
-    title: str(raw.title, 'Untitled'),
+    title: str(raw.title, "Untitled"),
     year: strOrNull(raw.year),
     overview: str(raw.overview),
     posterPath: strOrNull(raw.posterPath),
     backdropPath: strOrNull(raw.backdropPath),
-    genres: Array.isArray(raw.genres) ? raw.genres.filter((g): g is string => typeof g === 'string') : [],
+    genres: Array.isArray(raw.genres)
+      ? raw.genres.filter((g): g is string => typeof g === "string")
+      : [],
     runtime: numOrNull(raw.runtime),
     releaseDate: strOrNull(raw.releaseDate),
     status,
-    rating: rating !== null ? Math.min(10, Math.max(1, Math.round(rating))) : null,
-    notes: str(raw.notes),
     addedAt: numOrNull(raw.addedAt) ?? now,
     updatedAt: numOrNull(raw.updatedAt) ?? now,
     watchedAt: numOrNull(raw.watchedAt),
@@ -129,15 +137,20 @@ export function parseBackup(text: string): ParsedBackup {
   try {
     data = JSON.parse(text);
   } catch {
-    throw new Error('That file is not valid JSON.');
+    throw new Error("That file is not valid JSON.");
   }
-  if (!isObj(data) || data.app !== 'sceneo' || !Array.isArray(data.items)) {
-    throw new Error('That file is not a Sceneo backup.');
+  if (!isObj(data) || data.app !== "sceneo" || !Array.isArray(data.items)) {
+    throw new Error("That file is not a Sceneo backup.");
   }
-  const items = data.items.map(sanitizeItem).filter((i): i is TrackedItem => i !== null);
+  const items = data.items
+    .map(sanitizeItem)
+    .filter((i): i is TrackedItem => i !== null);
 
   let settings: Settings | null = null;
-  if (isObj(data.settings) && ['system', 'light', 'dark'].includes(data.settings.theme as string)) {
+  if (
+    isObj(data.settings) &&
+    ["system", "light", "dark"].includes(data.settings.theme as string)
+  ) {
     settings = { theme: data.settings.theme as ThemePreference };
   }
   return { items, settings, skipped: data.items.length - items.length };
@@ -146,7 +159,7 @@ export function parseBackup(text: string): ParsedBackup {
 /** Opens the system file picker and returns the parsed backup, or null if cancelled. */
 export async function pickBackup(): Promise<ParsedBackup | null> {
   const result = await DocumentPicker.getDocumentAsync({
-    type: ['application/json', 'text/plain', '*/*'],
+    type: ["application/json", "text/plain", "*/*"],
     copyToCacheDirectory: true,
     multiple: false,
   });

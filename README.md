@@ -23,9 +23,8 @@ EXPO_PUBLIC_TMDB_API_KEY=your_key
 - Library with status lists (Watching, Plan to watch, Completed, On hold, Dropped), filters and search
 - Per-episode tracking, per-season and whole-show toggles, long-press an episode to mark everything up to it
 - Quick "+1 episode" button on the library list; auto-status (watching / completed) from progress
-- Ratings (1-10) and notes per title
 - Upcoming tab: next episodes and unreleased movies for titles you track (pull to refresh)
-- Stats: watch time, episodes, movies, average rating, status and genre breakdown
+- Stats: watch time, episodes, movies, titles tracked, status and genre breakdown
 - Light / dark / system theme
 - Settings: export and import a `.json` backup (merge or replace)
 
