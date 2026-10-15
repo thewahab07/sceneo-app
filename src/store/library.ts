@@ -77,13 +77,15 @@ interface LibraryState {
   settings: Settings;
   hydrated: boolean;
 
-  addItem: (meta: ItemMeta, status?: Status) => void;
+  /** `watchedAt` (movies only) is when it was watched; defaults to now if the status is completed. */
+  addItem: (meta: ItemMeta, status?: Status, watchedAt?: number | null) => void;
   removeItem: (key: string) => void;
   refreshMeta: (meta: ItemMeta) => void;
 
   setStatus: (key: string, status: Status) => void;
 
-  toggleMovieWatched: (key: string) => void;
+  /** Marks a movie watched at the given time, or unwatched with null. */
+  setMovieWatched: (key: string, at: number | null) => void;
   toggleEpisode: (key: string, season: number, episode: number) => void;
   /** Marks every aired episode of a season watched / unwatched. */
   setSeasonWatched: (key: string, season: number, watched: boolean) => void;
@@ -120,7 +122,7 @@ export const useLibrary = create<LibraryState>()(
       settings: { theme: "dark" },
       hydrated: false,
 
-      addItem: (meta, status = "planned") =>
+      addItem: (meta, status = "planned", watchedAt = null) =>
         set((state) => {
           if (state.items[meta.key]) return state;
           const now = Date.now();
@@ -130,7 +132,9 @@ export const useLibrary = create<LibraryState>()(
             addedAt: now,
             updatedAt: now,
             watchedAt:
-              meta.type === "movie" && status === "completed" ? now : null,
+              meta.type === "movie" && status === "completed"
+                ? (watchedAt ?? now)
+                : null,
             watched: {},
             checkedAt: now,
           };
@@ -164,17 +168,17 @@ export const useLibrary = create<LibraryState>()(
           })),
         ),
 
-      toggleMovieWatched: (key) =>
+      setMovieWatched: (key, at) =>
         set((state) =>
           update(state, key, (item) => {
-            if (item.watchedAt) {
+            if (at === null) {
               return {
                 ...item,
                 watchedAt: null,
                 status: item.status === "completed" ? "planned" : item.status,
               };
             }
-            return { ...item, watchedAt: Date.now(), status: "completed" };
+            return { ...item, watchedAt: at, status: "completed" };
           }),
         ),
 

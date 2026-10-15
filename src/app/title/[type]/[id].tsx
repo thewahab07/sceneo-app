@@ -5,7 +5,6 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   Text,
@@ -27,6 +26,8 @@ import {
   SectionTitle,
 } from "@/components/ui";
 import { useAddToLibrary } from "@/components/useAddToLibrary";
+import { formatTimestamp } from "@/lib/dates";
+import { confirm, pickWatchedDate } from "@/lib/dialog";
 import { useTheme } from "@/lib/theme";
 import { getMeta, getSeasonEpisodes, IMG, type ItemMeta } from "@/lib/tmdb";
 import {
@@ -60,7 +61,7 @@ export default function TitleScreen() {
   const refreshMeta = useLibrary((s) => s.refreshMeta);
   const removeItem = useLibrary((s) => s.removeItem);
   const setStatus = useLibrary((s) => s.setStatus);
-  const toggleMovieWatched = useLibrary((s) => s.toggleMovieWatched);
+  const setMovieWatched = useLibrary((s) => s.setMovieWatched);
   const setAllWatched = useLibrary((s) => s.setAllWatched);
   const { add, busyKey } = useAddToLibrary();
 
@@ -119,22 +120,43 @@ export default function TitleScreen() {
   const isTv = data.type === "tv";
   const adding = busyKey === key;
 
-  const confirmRemove = () =>
-    Alert.alert(
-      "Remove from library?",
-      `${data.title} and all its progress will be deleted from this device.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: () => {
-            removeItem(key);
-            router.back();
-          },
-        },
-      ],
-    );
+  const confirmRemove = async () => {
+    const ok = await confirm({
+      title: "Remove from library?",
+      message: `${data.title} and all its progress will be deleted from this device.`,
+      confirmLabel: "Remove",
+      destructive: true,
+    });
+    if (!ok) return;
+    removeItem(key);
+    router.back();
+  };
+
+  /** Asks for a date, then marks the movie watched on it. Does nothing if cancelled. */
+  const markMovieWatched = async (initial: number | null = null) => {
+    const at = await pickWatchedDate({
+      subtitle: data.title,
+      initial,
+      confirmLabel: initial ? "Save date" : "Mark as watched",
+    });
+    if (at === null) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setMovieWatched(key, at);
+  };
+
+  const addMovieAsWatched = async () => {
+    const at = await pickWatchedDate({ subtitle: data.title });
+    if (at !== null) add(type, id, "completed", at);
+  };
+
+  const onStatus = (s: (typeof STATUSES)[number]) => {
+    // A movie can't be "completed" without a watched date, so ask for one.
+    if (item && item.type === "movie" && s === "completed" && !item.watchedAt) {
+      markMovieWatched();
+      return;
+    }
+    setStatus(key, s);
+  };
 
   return (
     <Screen topInset={false}>
@@ -224,7 +246,7 @@ export default function TitleScreen() {
                 label="Add as watched"
                 icon="checkmark"
                 variant="secondary"
-                onPress={() => add(type, id, "completed")}
+                onPress={addMovieAsWatched}
                 disabled={adding}
               />
             )}
@@ -243,27 +265,51 @@ export default function TitleScreen() {
                   key={s}
                   label={STATUS_LABEL[s]}
                   active={item.status === s}
-                  onPress={() => setStatus(key, s)}
+                  onPress={() => onStatus(s)}
                 />
               ))}
             </ScrollView>
 
             {item.type === "movie" ? (
-              <View className="mt-5 px-5">
-                <Button
-                  label={
-                    item.watchedAt
-                      ? `Watched ${formatDate(new Date(item.watchedAt).toISOString().slice(0, 10))}`
-                      : "Mark as watched"
-                  }
-                  icon={item.watchedAt ? "checkmark-circle" : "checkmark"}
-                  variant={item.watchedAt ? "secondary" : "primary"}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    toggleMovieWatched(key);
-                  }}
-                />
-              </View>
+              item.watchedAt ? (
+                <View className="mt-5 px-5">
+                  <Card className="flex-row items-center p-4">
+                    <View className="h-10 w-10 items-center justify-center rounded-full bg-accent">
+                      <Ionicons name="checkmark" size={22} color="#ffffff" />
+                    </View>
+                    <View className="ml-3 flex-1">
+                      <Muted className="text-xs">Watched on</Muted>
+                      <Text className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
+                        {formatTimestamp(item.watchedAt)}
+                      </Text>
+                    </View>
+                  </Card>
+                  <View className="mt-3 flex-row gap-3">
+                    <Button
+                      className="flex-1"
+                      label="Change date"
+                      icon="calendar-outline"
+                      variant="secondary"
+                      onPress={() => markMovieWatched(item.watchedAt)}
+                    />
+                    <Button
+                      className="flex-1"
+                      label="Unwatch"
+                      icon="close"
+                      variant="secondary"
+                      onPress={() => setMovieWatched(key, null)}
+                    />
+                  </View>
+                </View>
+              ) : (
+                <View className="mt-5 px-5">
+                  <Button
+                    label="Mark as watched"
+                    icon="checkmark"
+                    onPress={() => markMovieWatched()}
+                  />
+                </View>
+              )
             ) : (
               <ShowProgress item={item} onAll={(v) => setAllWatched(key, v)} />
             )}

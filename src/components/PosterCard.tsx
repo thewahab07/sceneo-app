@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import type { ReactNode } from "react";
 import { Pressable, Text, useWindowDimensions, View } from "react-native";
 
+import { pickWatchedDate } from "@/lib/dialog";
 import { STATUS_LABEL, type TrackedItem } from "@/lib/types";
 import {
   airedTotal,
@@ -146,7 +147,7 @@ export function LibraryCard({
   width: number;
 }) {
   const toggleEpisode = useLibrary((s) => s.toggleEpisode);
-  const toggleMovieWatched = useLibrary((s) => s.toggleMovieWatched);
+  const setMovieWatched = useLibrary((s) => s.setMovieWatched);
 
   const isTv = item.type === "tv";
   const next = isTv ? nextToWatch(item) : null;
@@ -159,12 +160,16 @@ export function LibraryCard({
     badge = "Watched";
   }
 
-  const onQuick = () => {
+  const onQuick = async () => {
     Haptics.selectionAsync();
     if (isTv) {
       if (next) toggleEpisode(item.key, next.season, next.episode);
+    } else if (item.watchedAt) {
+      setMovieWatched(item.key, null);
     } else {
-      toggleMovieWatched(item.key);
+      // Ask when it was watched instead of assuming today.
+      const at = await pickWatchedDate({ subtitle: item.title });
+      if (at !== null) setMovieWatched(item.key, at);
     }
   };
 

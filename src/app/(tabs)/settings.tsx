@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Alert, Linking, ScrollView, Text, View } from "react-native";
+import { Linking, ScrollView, Text, View } from "react-native";
 
 import {
   Button,
@@ -17,6 +17,7 @@ import {
   saveBackupToFolder,
   shareBackup,
 } from "@/lib/backup";
+import { confirm, notify, showDialog } from "@/lib/dialog";
 import type { ThemePreference } from "@/lib/types";
 import { useLibrary } from "@/store/library";
 
@@ -39,10 +40,11 @@ export default function SettingsScreen() {
     try {
       await shareBackup();
     } catch (e) {
-      Alert.alert(
-        "Export failed",
-        e instanceof Error ? e.message : "Something went wrong.",
-      );
+      notify({
+        title: "Export failed",
+        message: e instanceof Error ? e.message : "Something went wrong.",
+        tone: "danger",
+      });
     } finally {
       setBusy(false);
     }
@@ -55,15 +57,18 @@ export default function SettingsScreen() {
       const result = await saveBackupToFolder(choose);
       if (!result) return;
       setFolder(result.folder);
-      Alert.alert(
-        "Backup saved",
-        `${result.fileName}\n\nSaved in: ${result.folder}`,
-      );
+      notify({
+        title: "Backup saved",
+        message: `${result.fileName}\n\nSaved in: ${result.folder}`,
+        tone: "success",
+        icon: "download-outline",
+      });
     } catch (e) {
-      Alert.alert(
-        "Could not save backup",
-        `${e instanceof Error ? e.message : "Something went wrong."}\n\nIf Android would not let you use that folder, pick or create a subfolder (for example Downloads > Sceneo) and try again.`,
-      );
+      notify({
+        title: "Could not save backup",
+        message: `${e instanceof Error ? e.message : "Something went wrong."}\n\nIf Android would not let you use that folder, pick or create a subfolder (for example Downloads > Sceneo) and try again.`,
+        tone: "danger",
+      });
     } finally {
       setBusy(false);
     }
@@ -77,42 +82,40 @@ export default function SettingsScreen() {
       const summary = `${parsed.items.length} ${parsed.items.length === 1 ? "title" : "titles"} found${
         parsed.skipped ? ` (${parsed.skipped} skipped as invalid)` : ""
       }.`;
-      Alert.alert(
-        "Import backup",
-        `${summary}\n\nMerge keeps your current library and adds or updates titles from the file. Replace wipes the current library first.`,
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Merge",
-            onPress: () => importItems(parsed.items, parsed.settings, "merge"),
-          },
-          {
-            text: "Replace",
-            style: "destructive",
-            onPress: () =>
-              importItems(parsed.items, parsed.settings, "replace"),
-          },
+      const choice = await showDialog({
+        title: "Import backup",
+        icon: "push-outline",
+        message: `${summary}\n\nMerge keeps your current library and adds or updates titles from the file. Replace wipes the current library first.`,
+        actions: [
+          { label: "Merge with my library", value: "merge", style: "primary" },
+          { label: "Replace my library", value: "replace", style: "danger" },
+          { label: "Cancel", value: "cancel", style: "ghost" },
         ],
-      );
+      });
+      if (choice === "merge" || choice === "replace") {
+        importItems(parsed.items, parsed.settings, choice);
+      }
     } catch (e) {
-      Alert.alert(
-        "Import failed",
-        e instanceof Error ? e.message : "Something went wrong.",
-      );
+      notify({
+        title: "Import failed",
+        message: e instanceof Error ? e.message : "Something went wrong.",
+        tone: "danger",
+      });
     } finally {
       setBusy(false);
     }
   };
 
-  const onClear = () =>
-    Alert.alert(
-      "Delete all data?",
-      "This removes every title and all progress from this device. Export a backup first if you might want it back.",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Delete everything", style: "destructive", onPress: clearAll },
-      ],
-    );
+  const onClear = async () => {
+    const ok = await confirm({
+      title: "Delete all data?",
+      message:
+        "This removes every title and all progress from this device. Export a backup first if you might want it back.",
+      confirmLabel: "Delete everything",
+      destructive: true,
+    });
+    if (ok) clearAll();
+  };
 
   return (
     <Screen>
