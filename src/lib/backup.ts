@@ -1,6 +1,8 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as DocumentPicker from "expo-document-picker";
-import { File, Paths } from "expo-file-system";
+import { Directory, File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
+import { Platform } from "react-native";
 
 import { useLibrary } from "@/store/library";
 import {
@@ -26,13 +28,15 @@ export function buildBackup(): BackupFile {
   };
 }
 
-export async function exportBackup(): Promise<void> {
-  const backup = buildBackup();
-  const date = new Date().toISOString().slice(0, 10);
-  const file = new File(Paths.cache, `sceneo-backup-${date}.json`);
+const backupFileName = () =>
+  `sceneo-backup-${new Date().toISOString().slice(0, 10)}.json`;
+
+/** Opens the system share sheet (also the way to "Save to Files" on iOS). */
+export async function shareBackup(): Promise<void> {
+  const file = new File(Paths.cache, backupFileName());
   if (file.exists) file.delete();
   file.create();
-  file.write(JSON.stringify(backup, null, 2));
+  file.write(JSON.stringify(buildBackup(), null, 2));
 
   if (!(await Sharing.isAvailableAsync())) {
     throw new Error("Sharing is not available on this device.");
@@ -42,6 +46,88 @@ export async function exportBackup(): Promise<void> {
     dialogTitle: "Export Sceneo backup",
     UTI: "public.json",
   });
+}
+
+/* ---------- Save to a folder on the device (Android) ---------- */
+
+/** Folder saving uses Android's Storage Access Framework; iOS uses the share sheet instead. */
+export const canSaveToFolder = Platform.OS === "android";
+
+const FOLDER_KEY = "sceneo-backup-folder";
+
+/** Makes the folder picker open in the public Downloads folder. */
+const DOWNLOADS_URI =
+  "content://com.android.externalstorage.documents/document/primary%3ADownload";
+
+/** Turns a folder URI into something readable, e.g. "Download/Sceneo". */
+function folderLabel(uri: string): string {
+  const last = decodeURIComponent(uri).split("/tree/").pop() ?? "";
+  const path = last.split(":").slice(1).join(":") || last;
+  return path || "selected folder";
+}
+
+export async function getSavedFolder(): Promise<{
+  uri: string;
+  label: string;
+} | null> {
+  try {
+    const uri = await AsyncStorage.getItem(FOLDER_KEY);
+    return uri ? { uri, label: folderLabel(uri) } : null;
+  } catch {
+    return null;
+  }
+}
+
+const isCancelled = (e: unknown) =>
+  e instanceof Error &&
+  /cancel/i.test(`${(e as { code?: string }).code ?? ""} ${e.message}`);
+
+export interface SaveResult {
+  fileName: string;
+  folder: string;
+}
+
+/**
+ * Writes the backup as a .json file into a folder the user owns.
+ * - With a remembered folder and `choose: false`, saves straight there.
+ * - Otherwise opens the folder picker (starting in Downloads), remembers the choice and saves.
+ * Returns null if the user cancels the picker.
+ */
+export async function saveBackupToFolder(
+  choose: boolean,
+): Promise<SaveResult | null> {
+  const json = JSON.stringify(buildBackup(), null, 2);
+  const fileName = backupFileName();
+
+  const write = (dir: Directory) => {
+    const file = dir.createFile(fileName, "application/json");
+    file.write(json);
+  };
+
+  if (!choose) {
+    const saved = await getSavedFolder();
+    if (saved) {
+      try {
+        write(new Directory(saved.uri));
+        return { fileName, folder: saved.label };
+      } catch {
+        // Folder was deleted or access was revoked: forget it and ask again.
+        await AsyncStorage.removeItem(FOLDER_KEY).catch(() => {});
+      }
+    }
+  }
+
+  let dir: Directory;
+  try {
+    dir = await Directory.pickDirectoryAsync(DOWNLOADS_URI);
+  } catch (e) {
+    if (isCancelled(e)) return null;
+    throw e;
+  }
+
+  write(dir);
+  await AsyncStorage.setItem(FOLDER_KEY, dir.uri).catch(() => {});
+  return { fileName, folder: folderLabel(dir.uri) };
 }
 
 /* ---------- Import ---------- */
